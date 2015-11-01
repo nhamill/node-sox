@@ -1,15 +1,31 @@
 var sox = require('../')
+  , fs = require('fs')
   , assert = require('assert')
   , path = require('path')
   , mkdirp = require('mkdirp')
   , rimraf = require('rimraf')
   , soundWav = path.join(__dirname, 'sound.wav')
+  , soundWavStream = fs.createReadStream(path.join(__dirname, 'sound.wav'), { flags: 'r'})
   , soundMp3 = path.join(__dirname, 'sound.mp3')
   , tmpDir = path.join(__dirname, 'tmp')
   , outputMp3 = path.join(tmpDir, 'output.mp3')
 
 describe("sox", function () {
   describe("identify", function () {
+    it("stream", function(done) {
+      sox.identify(soundWavStream, function (err, results) {
+        if (err) return done(err);
+        assert.deepEqual(results, {
+          bitRate: 0,
+          format: 'wav',
+          duration: 1.5,
+          sampleCount: 66150,
+          channelCount: 1,
+          sampleRate: 44100,
+        });
+        done();
+      });
+    });
     it("wav", function(done) {
       sox.identify(soundWav, function (err, results) {
         if (err) return done(err);

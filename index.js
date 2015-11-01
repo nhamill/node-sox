@@ -29,17 +29,31 @@ function parseBitRate(str) {
   return mult ? mult * n : n;
 }
 
-function capture(exe, args, callback){
-  childProcess.execFile(exe, args, function(err, stdout, stderr){
-    if (err) {
-      err.stdout = stdout;
-      err.stderr = stderr;
-      err.args = args;
-      callback(err);
-    } else {
-      callback(null, stdout.trim());
-    }
-  });
+function capture(exe, args, callback, stdin_stream){
+  var child = childProcess.spawn(exe, args);
+	var stdout_str = '';
+	child.on('error', function(err){
+		err.stdout = child.stdout;
+		err.stderr = child.stderr;
+		err.args = args;
+		callback(err);
+	});
+	child.stdin.on('error', function(error){
+		//required since the stdin might close early
+		//and without this handler the error escalates
+		;
+	});
+	child.on('close', function(code){
+		callback(null, stdout_str.trim());
+	});
+
+	child.stdout.on('data', function(data){
+		stdout_str += data;
+	});
+
+	if (stdin_stream) {
+		stdin_stream.pipe(child.stdin);
+	}
 }
 
 function int(it){
@@ -50,9 +64,13 @@ function float(it){
   return parseFloat(it, 10);
 }
 
-function identify(inputFile, callback){
+function identify(input, callback){
   var results = {}
     , batch = new Batch()
+	var input_source = '-';
+	if ('string' == typeof(input)) {
+		input_source = input;
+	}
 
   soxInfo('-t', function(value) { results.format        = value; });
   soxInfo('-r', function(value) { results.sampleRate    = value; });
@@ -71,11 +89,15 @@ function identify(inputFile, callback){
 
   function soxInfo(arg, assign) {
     batch.push(function(cb) {
-      capture('sox', ['--info', arg, inputFile], function(err, value) {
+			var stdin_stream = undefined;
+			if ('-' == input_source) {
+				stdin_stream = input;
+			}
+      capture('sox', ['--info', arg, input_source], function(err, value) {
         if (err) return cb(err);
         assign(value);
         cb();
-      });
+      }, stdin_stream);
     });
   }
 }
