@@ -24,6 +24,7 @@
     "rimraf": "~2.0.2"
   },
   "dependencies": {
-    "batch": "~0.3.2"
+    "batch": "~0.3.2",
+    "streamifier": "^0.1.1"
   }
 }
