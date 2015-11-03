@@ -64,20 +64,16 @@ function identify(input, callback){
     for (var k in conversions) {
       results[k] = conversions[k](results[k])
     }
-    callback(null, results);
+    callback(null, results, input);
   });
 
   function soxInfo(arg, assign) {
     batch.push(function(cb) {
-			var stdin_stream = undefined;
-			if ('-' == input_source) {
-				stdin_stream = input;
-			}
       capture('sox', ['--info', arg, input_source], function(err, value) {
         if (err) return cb(err);
         assign(value);
         cb();
-      }, stdin_stream);
+      });
     });
   }
 
@@ -159,7 +155,11 @@ util.inherits(Transcode, EventEmitter);
 
 Transcode.prototype.start = function() {
   var self = this;
-  identify(this.inputFile, function(err, src) {
+  identify(self.input, function(err, src, input_stream) {
+		if ('string' != typeof(self.input)) {
+			self.input = input_stream;
+		}
+
     if (err) {
       self.emit('error', err);
       return
