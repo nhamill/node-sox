@@ -1,7 +1,10 @@
 var childProcess = require('child_process')
-  , EventEmitter = require('events').EventEmitter
-  , Batch = require('batch')
-  , util = require('util')
+	, buffer = require('buffer')
+	, streamifier = require('streamifier')
+	, fs = require('fs')
+	, EventEmitter = require('events').EventEmitter
+	, Batch = require('batch')
+	, util = require('util')
 
 exports.identify = identify;
 exports.transcode = transcode;
@@ -41,11 +44,14 @@ function float(it){
 function identify(input, callback){
   var results = {}
     , batch = new Batch()
-	var input_source = '-';
-	if ('string' == typeof(input)) {
-		input_source = input;
+	batch.concurrency(1);
+	var input_source = input;
+	var input_buffer = new Buffer(0);
+	var input_stream = null;
+	if ('string' != typeof(input)) {
+		input_stream = input;
+		input_source = '-';
 	}
-
   soxInfo('-t', function(value) { results.format        = value; });
   soxInfo('-r', function(value) { results.sampleRate    = value; });
   soxInfo('-c', function(value) { results.channelCount  = value; });
@@ -211,7 +217,12 @@ Transcode.prototype.start = function() {
         err.args = args;
         self.emit('error', err);
       } else {
-        identify(self.outputFile, function(err, dest) {
+				var output = self.output;
+				if ('string' != typeof(output)) {
+					output = new streamifier.createReadStream();
+					output.push(stdout);
+				}
+        identify(output, function(err, dest) {
           if (err) {
             self.emit('error', err);
           } else {
