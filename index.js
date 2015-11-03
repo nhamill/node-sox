@@ -29,32 +29,6 @@ function parseBitRate(str) {
   return mult ? mult * n : n;
 }
 
-function capture(exe, args, callback, stdin_stream){
-  var child = childProcess.spawn(exe, args);
-	var stdout_str = '';
-	child.on('error', function(err){
-		err.stdout = child.stdout;
-		err.stderr = child.stderr;
-		err.args = args;
-		callback(err);
-	});
-	child.stdin.on('error', function(error){
-		//required since the stdin might close early
-		//and without this handler the error escalates
-		;
-	});
-	child.on('close', function(code){
-		callback(null, stdout_str.trim());
-	});
-
-	child.stdout.on('data', function(data){
-		stdout_str += data;
-	});
-
-	if (stdin_stream) {
-		stdin_stream.pipe(child.stdin);
-	}
-}
 
 function int(it){
   return parseInt(it, 10);
@@ -100,6 +74,58 @@ function identify(input, callback){
       }, stdin_stream);
     });
   }
+
+	function capture(exe, args, callback){
+		var child = childProcess.spawn(exe, args);
+		var stdout_str = '';
+		child.on('error', function(err){
+			err.stdout = child.stdout;
+			err.stderr = child.stderr;
+			err.args = args;
+			callback(err);
+		});
+		child.stdin.on('error', function(error){
+			//required since the stdin might close early
+			//and without this handler the error escalates
+			//sox only seems to need to read the header of a file for determining info
+		});
+		var perform_unshift = false;
+		var whole_input_stream_read = false;
+		if (input_stream && 0 == input_buffer.length) {
+			perform_unshift = true;
+		}
+		child.on('close', function(code){
+			if (perform_unshift) {
+				if (whole_input_stream_read) {
+					//the whole stream was read so don't try to unshift or it'll fail
+					//instead, just recreate the whole input stream
+					input = new streamifier.createReadStream;
+					input.push(input_buffer);
+				} else {
+					input_stream.unshift(input_buffer);
+				}
+			}
+			callback(null, stdout_str.trim());
+		});
+
+		child.stdout.on('data', function(data){
+			stdout_str += data;
+		});
+
+		if (input_stream) {
+			input_stream.on('end', function(){
+				whole_input_stream_read = true;
+			});
+			input_stream.on('data', function(data){
+				input_buffer = Buffer.concat([input_buffer, data]);
+			});
+			if (input_buffer.length > 0) {
+				child.stdin.write(input_buffer);
+			} else {
+				input_stream.pipe(child.stdin);
+			}
+		}
+	}
 }
 
 function transcode(inputFile, outputFile, options) {
