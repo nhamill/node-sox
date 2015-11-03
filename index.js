@@ -130,14 +130,14 @@ function identify(input, callback){
 	}
 }
 
-function transcode(inputFile, outputFile, options) {
-  return new Transcode(inputFile, outputFile, options);
+function transcode(input, output, options) {
+  return new Transcode(input, output, options);
 }
 
-function Transcode(inputFile, outputFile, options) {
+function Transcode(input, output, options) {
   EventEmitter.call(this);
-  this.inputFile = inputFile;
-  this.outputFile = outputFile;
+  this.input = input;
+  this.output = output;
   this.options = options;
 
   // defaults
@@ -171,19 +171,45 @@ Transcode.prototype.start = function() {
       '--guard',
       '--magic',
       '--show-progress',
-      self.inputFile,
+      '-t', self.options.format];
+		if ('string' == typeof(self.input)) {
+			args = args.concat([self.input]);
+    } else {
+			args = args.concat(['-']);
+		}
+		args = args.concat([
       '-r', self.options.sampleRate,
       '-t', self.options.format,
       '-C', Math.round(self.options.bitRate / 1024) +
             self.options.compressionQuality,
       '-c', self.options.channelCount,
-      self.outputFile
-    ];
+		]);
+		if ('string' == typeof(self.output)) {
+			args = args.concat([self.output]);
+    } else {
+			args = args.concat(['-']);
+		}
     var bin = childProcess.spawn('sox', args);
-    var stdout = "";
-    bin.stdout.setEncoding('utf8');
+    var stdout = new Buffer(0);
+		if ('string' != typeof(self.input)) {
+			self.input.pipe(bin.stdin);
+			try {
+				//since the stream may have paused when the processes stdin went away
+				//try to resume to data output, but not all streams like this and
+				//may emit an error for "Cannot switch to old mode now"
+				self.input.resume();
+			} catch (ex) {
+				//console.dir(ex);
+			}
+		}
     bin.stdout.on('data', function(data) {
-      stdout += data;
+			//only need to record a small bit of stdout to be used as the input
+			//stream to identifying the output; 8096 is probably too much, but it's
+			//easy and hopefully always enough
+			if (stdout.length < 8096) {
+				stdout = Buffer.concat([stdout, data]);
+			}
+			self.output.write(data);
     });
     var stderr = "";
     var buffer = "";
