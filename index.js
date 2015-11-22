@@ -9,6 +9,7 @@ var childProcess = require('child_process')
 exports.identify = identify;
 exports.transcode = transcode;
 
+var base_sox_args = undefined;
 var SENTINEL = /[\n\r]/
 
 // to edit this see https://gist.github.com/4142076
@@ -52,12 +53,23 @@ function identify(input, callback){
 		input_stream = input;
 		input_source = '-';
 	}
-	soxInfo('-t', function(value) { results.format				= value; });
+	if (undefined == base_sox_args) {
+		soxInfo('-h', function(stdout_str) {
+			base_sox_args = [];
+			if (-1 != stdout_str.indexOf('--guard')) {
+				base_sox_args.push('--guard');
+			}
+			if (-1 != stdout_str.indexOf('--magic')) {
+				base_sox_args.push('--magic');
+			}
+		});
+	}
+	soxInfo('-t', function(value) { results.format			= value; });
 	soxInfo('-r', function(value) { results.sampleRate		= value; });
 	soxInfo('-c', function(value) { results.channelCount	= value; });
 	soxInfo('-s', function(value) { results.sampleCount		= value; });
-	soxInfo('-D', function(value) { results.duration			= value; });
-	soxInfo('-B', function(value) { results.bitRate				= value; });
+	soxInfo('-D', function(value) { results.duration		= value; });
+	soxInfo('-B', function(value) { results.bitRate			= value; });
 
 	batch.end(function(err) {
 		if (err) return callback(err);
@@ -69,7 +81,11 @@ function identify(input, callback){
 
 	function soxInfo(arg, assign) {
 		batch.push(function(cb) {
-			capture('sox', ['--info', arg, input_source], function(err, value) {
+			var args = [args];
+			if ('-h' != arg) {
+				args = ['--info', arg, input_source];
+			}
+			capture('sox', args, function(err, value) {
 				if (err) return cb(err);
 				assign(value);
 				cb();
@@ -167,9 +183,8 @@ Transcode.prototype.start = function() {
 
 		self.emit('src', src);
 
-		var args = [
-			'--guard',
-			'--magic',
+		var args = [].concat(base_sox_args);
+		args = args.concat = [
 			'--show-progress',
 			'-t', self.options.format];
 		if ('string' == typeof(self.input)) {
